@@ -17,11 +17,12 @@ This project develops and validates a linear regression model to explain the fac
 
 This project uses the **Wine Quality Dataset** from the UCI Machine Learning Repository.
 
-The original dataset can be found here:
+Original source:
+[uci.edu/dataset](https://archive.ics.uci.edu/dataset/186/wine+quality)
 
-🔗 :contentReference[oaicite:0]{index=0}
 
-The dataset contains physicochemical measurements of Portuguese *Vinho Verde* wines and is commonly used for regression and classification problems. :contentReference[oaicite:1]{index=1}
+
+The dataset contains physicochemical measurements of Portuguese *Vinho Verde* wines and is commonly used for regression and classification problems.
 
 ---
 
