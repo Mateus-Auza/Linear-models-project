@@ -35,8 +35,7 @@ df-print: kable
 
 ## 0. Preprocessing
 ```{r}
-setwd("C:\\Users\\mtpla\\Downloads")
-wine_data= read.table("Wine_data.txt",sep = ";", header = TRUE, stringsAsFactors = FALSE)
+wine_data= read.table("data/Wine_data.txt",sep = ";", header = TRUE, stringsAsFactors = FALSE)
 wine_data$cat_alcohol=ifelse(wine_data$alcohol >= 0 & wine_data$alcohol < 10, 0, # low alcohol (in terms of red wine)
                       ifelse(wine_data$alcohol >= 10 & wine_data$alcohol <= 12, 1,   # medium alcohol
                       ifelse(wine_data$alcohol > 12 & wine_data$alcohol <= 16, 2, NA))) # high alcohol
