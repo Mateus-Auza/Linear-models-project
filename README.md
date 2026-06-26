@@ -19,7 +19,7 @@ This project uses the **Wine Quality Dataset** from the UCI Machine Learning Rep
 
 Original source:
 
-[uci.edu/dataset](https://archive.ics.uci.edu/dataset/186/wine+quality)
+[UCI Machine Learning Repository – Wine Quality Dataset](https://archive.ics.uci.edu/dataset/186/wine+quality)
 
 
 
@@ -46,19 +46,15 @@ The project aims to:
 .
 ├── code/
 │   └── code.qmd
-│
 ├── data/
 │   └── Wine_data.txt
-│
 ├── figures/
 │   ├── correlation-matrix.png
 │   ├── dffits.png
 │   ├── forward_selection.png
 │   └── residuals_vs_fitted.png
-│
 ├── report/
 │   └── report.pdf
-│
 ├── LICENSE
 └── README.md
 ```
@@ -91,7 +87,7 @@ The analysis consists of:
 
 Understanding the relationships among the numerical variables before model construction.
 
-![](figures/correlation-matrix.png)
+![Correlation Matrix](figures/correlation-matrix.png)
 
 ---
 
@@ -99,7 +95,7 @@ Understanding the relationships among the numerical variables before model const
 
 Selection of the optimal regression model based on Adjusted R².
 
-![](figures/forward_selection.png)
+![Forward Model Selection](figures/forward_selection.png)
 
 ---
 
@@ -107,7 +103,7 @@ Selection of the optimal regression model based on Adjusted R².
 
 Diagnostic plot used to assess the linearity assumption.
 
-![](figures/residuals_vs_fitted.png)
+![Residuals vs Fitted](figures/residuals_vs_fitted.png)
 
 ---
 
@@ -115,7 +111,7 @@ Diagnostic plot used to assess the linearity assumption.
 
 Detection of influential observations used during model refinement.
 
-![](figures/dffits.png)
+![DFFITS](figures/dffits.png)
 
 ---
 
@@ -153,11 +149,7 @@ Main packages:
 
 ## Report
 
-The complete analysis is available in:
-
-```
-report/report.pdf
-```
+The complete report is available in `report/report.pdf`.
 
 ---
 
