@@ -1,0 +1,783 @@
+---
+title: "Linear Models Project"
+subtitle: "Regression Analysis on the Wine Quality Dataset"
+author:
+  - "Mateus Auza Cruz"
+  - "Yassine Zeamari"
+date: "2024-12-08"
+
+format:
+  pdf:
+    pdf-engine: xelatex
+    documentclass: scrartcl
+    papersize: letter
+    fontsize: 11pt
+    colorlinks: true
+    fig-cap-location: bottom
+    fig-pos: H
+    geometry:
+      - margin=1in
+
+execute:
+  echo: false
+  warning: false
+  message: false
+  cache: false
+
+editor:
+  markdown:
+    wrap: 80
+
+df-print: kable
+---
+
+
+
+## 0. Preprocessing
+```{r}
+setwd("C:\\Users\\mtpla\\Downloads")
+wine_data= read.table("Wine_data.txt",sep = ";", header = TRUE, stringsAsFactors = FALSE)
+wine_data$cat_alcohol=ifelse(wine_data$alcohol >= 0 & wine_data$alcohol < 10, 0, # low alcohol (in terms of red wine)
+                      ifelse(wine_data$alcohol >= 10 & wine_data$alcohol <= 12, 1,   # medium alcohol
+                      ifelse(wine_data$alcohol > 12 & wine_data$alcohol <= 16, 2, NA))) # high alcohol
+wine_data$quality = cut(wine_data$quality,breaks = c(0, 4, 6, 8), # Définir les intervalles des classes
+                               labels = c("0", "1", "2"), # Noms des catégories
+                               right = TRUE) # Inclure la borne supérieure
+require("dplyr")
+wine_data$cat_alcohol <- as.factor(wine_data$cat_alcohol)
+wine_data = wine_data %>% select(-alcohol)
+str(wine_data)
+```
+## 1.Separation of a small dataset
+```{r}
+set.seed(100)
+x=sample(c(1:600),60) # 60 because 10%
+validation_data= wine_data[x,]
+training_data=wine_data[-x,]
+```
+
+## 2. Formulating the idea/goal
+
+**As data scientists our goal is to develop a linear regression model that accurately predicts citric.acid (response variable) based on the given predictors (volatile.acidity, fixed.acidity, pH, residual.sugar, density, chlorides, free.sulfur.dioxide, total.sulfur.dioxide, quality, sulphates, and cat_alcohol). In practice, we are modelling the factors influencing citric acid concentrations in wine samples.**
+
+As a corollary of this goal we:
+
+**-Train the Model:** Use 90% of the data (training_data) to construct a linear regression model that obeys to the classical assumptions (seen in the theory lectures). This ensures the validity of inference.
+
+**-Perform Validation and Inference:** Use the remaining 10% of the data (validation_data) to assess the model's predictive performance. Construct confidence intervals for the predictions to evaluate the uncertainty associated with the predictions and validate the model's applicability for inference.
+
+**-Evaluate Usefulness:** Critically analyze the model's usefulness in understanding the underlying relationships and its ability to make accurate predictions.
+
+## 3.
+```{r}
+#install.packages("moments")
+library(moments)
+numeric_columns= sapply(training_data[, -c(11, 12)], is.numeric)
+desc_stats <- data.frame(
+  Mean = sapply(training_data[,-c(11,12)][,numeric_columns], mean, na.rm = TRUE),
+  Std_Dev = sapply(training_data[,-c(11,12)][,numeric_columns], sd, na.rm = TRUE),
+  Skewness = sapply(training_data[,-c(11,12)][,numeric_columns], skewness, na.rm = TRUE),
+  Kurtosis = sapply(training_data[,-c(11,12)][,numeric_columns], kurtosis, na.rm = TRUE)
+)
+```
+*Boxplots*
+
+```{r}
+#install.packages("patchwork")
+#install.packages("ggplot2")
+library(patchwork)
+library(ggplot2)
+g1 = ggplot(training_data)+geom_boxplot(aes(y =free.sulfur.dioxide))+theme_minimal()+labs(title ="free.sulfur.dioxide")
+g2 = ggplot(training_data)+geom_boxplot(aes(y = fixed.acidity)) +theme_minimal() +labs(title = "fixed.acidity")
+g3 = ggplot(training_data)+ geom_boxplot(aes(y = volatile.acidity)) +theme_minimal() +labs(title = "volatile.acidity")
+g4 = ggplot(training_data)+ geom_boxplot(aes(y = citric.acid)) +theme_minimal() +labs(title = "citric.acid")
+g5 = ggplot(training_data)+ geom_boxplot(aes(y = residual.sugar)) +theme_minimal() +labs(title = "residual.sugar")
+g6 = ggplot(training_data)+ geom_boxplot(aes(y = chlorides)) +theme_minimal() +labs(title = "chlorides")
+g7=ggplot(training_data)+geom_boxplot(aes(y =total.sulfur.dioxide))+theme_minimal()+labs(title="total.sulfur.dioxide")
+g8 = ggplot(training_data)+ geom_boxplot(aes(y = density)) +theme_minimal() +labs(title = "density")
+g9 = ggplot(training_data) + geom_boxplot(aes(y = pH)) +theme_minimal() +labs(title = "pH")
+g10 = ggplot(training_data) + geom_boxplot(aes(y = sulphates)) +theme_minimal() +labs(title = "sulphates")
+g11 = ggplot(training_data) +geom_boxplot(aes(y = quality)) +theme_minimal() +labs(title = "quality")
+g12 = ggplot(training_data) + geom_boxplot(aes(y = cat_alcohol)) +theme_minimal() +labs(title = "cat_alcohol")
+#Plots
+(g1 | g2 | g3) /(g4 | g5 | g6) /(g7 | g8 | g9) /(g10 | g11 | g12)
+
+```
+
+```{r}
+# correlation matrix
+#install.packages("corrplot")
+library(corrplot)
+corrplot(cor(training_data[,-c(11,12)][,numeric_columns]),method = "color", type = "upper",addCoef.col = "black",number.cex = 0.7,tl.col = "black",tl.srt = 45,title = "Correlation matrix")
+```
+
+
+## 4.Strict Exogeineity
+Usually, we can suspect that the strict exogeneity assumption is violated when, in our model, we have:
+
+*-Omission of variables*: Not in our case, as all relevant variables are included in the model.
+
+*-Autocorrelation of the error term*: This will be checked later.
+
+Therefore, ceteris paribus, because all relevant variables are included in the model, we assume that the strict exogeneity assumption holds. So, ceteris paribus, because all variables are in the model, we assume that the strict exogeininty assumption holds.
+
+## 5.Model selection
+
+Before calculating the model selection criteria, let's first do a test of the **significant coefficients** (Like in Lab 1).
+
+*Theory:*
+
+This is actually an individual F-test for all the coefficients of our regression model, in other words we are testing if the difference between the restricted model(full model without the individual variable) and the full model is far away or not from 0.
+
+The hypothesis are:
+ $$
+ H_0: \beta_j = 0
+ $$
+  $$
+  H_1: \beta_j \neq 0
+  $$
+We have seen in the theory course (slide 153) that the individual F-statistic can be written as:
+
+$$
+F = \frac{MSR(X_k | X_1, \dots, X_{k-1}, X_{k+1}, \dots, X_m)}{MSE} \sim F(1, n - p)
+$$
+
+where:
+
+- **MSR**: Mean Square Regression, associated with the predictor of interest ($\beta_k$).  
+- **MSE**: Mean Square Error, which estimates the variance of the residuals.  
+- **n**: Number of observations.  
+- **p**: Number of parameters in the model (including the intercept).  
+
+**Code of the individual F-test**
+```{r}
+reg=lm(citric.acid~ volatile.acidity+fixed.acidity+pH+residual.sugar+density+chlorides+free.sulfur.dioxide+total.sulfur.dioxide+quality +sulphates+cat_alcohol,data = training_data)
+summary(reg)
+```
+After observing the individual F-tests from the model summary, we found that the coefficients for the variables **density**, **pH**, **quality2**, **sulphates**, and **residual.sugar** were not significant individually. 
+Let's test if these variables are **jointly significant**.
+
+To do this we need to perform a partial F-test.
+ 
+**Partial F-test hypothesis:**
+$$
+H_0: \beta_{\text{density}} = \beta_{\text{pH}} = \beta_{\text{quality2}} = \beta_{\text{sulphates}} = 0
+$$
+
+$$
+H_1: \exists i \in \{\text{density}, \text{pH}, \text{quality2}, \text{sulphates}\} \, / \, \beta_i \neq 0
+$$
+We have seen in the theory course (slide 153) that the individual F-statistic can be written as:
+$$
+F = \frac{MSR(X_q,\dots,X_{p-1} | X_1, \dots, X_{q-1})}{MSE} \sim F(p-q, n - p)
+$$
+**Code:**
+```{r}
+library(car)
+linearHypothesis(reg, hypothesis.matrix = c("density=0", "sulphates=0","residual.sugar=0","pH=0", "quality2=0" ))
+```
+**Interpretation**
+The partial F-test results indicate that we do not reject the null hypothesis that the coefficients of density, pH, quality2, sulphates, and residual.sugar are simultaneously equal to zero. This implies that these variables do not significantly improve the quality of the model fit.
+
+**Decision to Remove Variables**
+Since density is highly insignificant, and sulphates and residual.sugar provide limited practical information, we decide to remove these variables from our model.
+
+**Can we remove quality2 form our model?**
+If we wish to remove quality2 from the model, we must also test for the joint significance of quality1 and quality2, as these variables are related. A partial F-test for these variables is conducted as follows:
+```{r}
+library(car)
+linearHypothesis(reg, hypothesis.matrix = c("quality1","quality2"))
+```
+**Interpretation**
+The p-value from the partial F-test is smaller than 0.05, meaning we reject the null hypothesis that the coefficients of quality1 and quality2 are simultaneously equal to zero. Thus, we cannot remove quality from our model as it significantly improves the model fit.
+
+**Decision to Keep pH in the Model**
+Although pH was found to be insignificant in the individual F-test, its p-value is the smallest among all the insignificant coefficients. Furthermore, we believe it has practical relevance, as it provides valuable information about the acidity levels of the wines (whether they are acidic or very acidic). Thus, we decide to retain pH in our model
+
+**Model without sulphates,density and residual.sugar**
+```{r}
+reg_pH=lm(citric.acid~ volatile.acidity+fixed.acidity+chlorides+quality+pH+free.sulfur.dioxide+total.sulfur.dioxide +cat_alcohol,data = training_data)
+summary(reg_pH)
+```
+
+From now on we consider the following interactions:
+
+**Interactions:**
+
+-*Wines with a high alcohol level may have a chemical composition that mitigates or accentuates the effect of acidity (pH) on citric acid concentration* (source:https://oeno-one.eu/article/view/7476) 
+
+In our case, pH:cat_alcohol_2
+
+-*Wines of medium quality may show a particular sensitivity to chloride concentration* (source: https://oeno-one.eu/article/view/4795)
+
+In our case, chlorides:quality_1
+
+## 5.1 Model selection- Type 1
+
+The idea behind the model selection procedure is to determine the best model with **p** variables, where **p** ranges from 1 to 12 in our case. The selection is based on a goodness-of-fit criterion, which helps us evaluate how well each model fits the data.
+
+The following criteria were discussed and used in class to evaluate the models:
+
+- *Adjusted R-squared*
+- *Mallows' Cp*
+- *AIC (Akaike Information Criterion)*
+- *BIC (Bayesian Information Criterion)*
+
+For the purpose of our analysis, we will focus on these four criteria and exclude the others.
+
+**Code to calculate the criteria:**
+```{r}
+#install.packages("olsrr")
+#install.packages("fastDummies")
+library(olsrr)
+library(fastDummies)
+training_data <- fastDummies::dummy_cols(training_data, select_columns = "cat_alcohol")
+training_data <- fastDummies::dummy_cols(training_data, select_columns = "quality")
+reg_inter <- lm(citric.acid~ volatile.acidity+fixed.acidity+pH+pH:cat_alcohol_2+chlorides+chlorides:quality_1+free.sulfur.dioxide+total.sulfur.dioxide+quality_1+quality_2+cat_alcohol_1+cat_alcohol_2,data = training_data)
+type_1_selection <- ols_step_best_subset(reg_inter)
+type_1_selection
+```
+We can see from the regression summary that the maximum value of R_squared_adj is when p=10 (the number of variables).
+It has the lowest values for AIC.
+
+Thus we will choose the model 10:
+
+**"volatile.acidity fixed.acidity chlorides free.sulfur.dioxide total.sulfur.dioxide quality_2 cat_alcohol_1 cat_alcohol_2 pH:cat_alcohol_2 chlorides:quality_1"**
+
+*Remark: We can see that p=11 is also good subset because the mallow's Cp is 11.08.To confirm our results from the model selection type 1, we will do a type 2 models selection*
+
+## 5.2 Model selection- Type 2 (Forward model selection)
+
+The *forward model selection procedure* starts with an empty model and variables are added sequentially to the model based on certain criteria. This process allows us to build a model step by step, adding the most important predictors at each stage.
+
+**Proccess:**
+
+1. **Start with an empty model*: Initially, no predictors are included in the model.
+
+2. *Add the most significant predictor*: The predictor that improves the model the most.
+
+3. *Continue adding predictors*: At each step, the next most significant predictor is added, and the model is refitted. This process continues until adding any further predictors no longer improves the model based on the chosen criterion.
+
+The goal is to find the smallest model that best explains the data while avoiding overfitting.
+
+**Code:**
+```{r}
+type_2_selection <- ols_step_forward_adj_r2(reg_inter)
+plot(type_2_selection)
+```
+We can confirm that p=10 might be a best selection model because it has a good trade-off between model complexity and explanatory power. 
+
+Thus we conclude that the we have the best model.
+
+**(a). Check of linearity/non-linearity**
+```{r}
+best_model=lm(citric.acid~volatile.acidity +fixed.acidity+ chlorides+ free.sulfur.dioxide+ total.sulfur.dioxide+ quality_2 +cat_alcohol_1 +cat_alcohol_2 +pH:cat_alcohol_2+ chlorides:quality_1,data = training_data)
+plot(best_model,which=1)
+```
+
+We can see that the because the curve that regresses the residuals is not a straight. Thus, we can suspect a non linear relation between the predictors and the response variable.
+
+**From now, we ignore this suspicion and we assume that the current model is linear**
+
+**(b) Outliers and/or influential observations**
+
+**Outliers with respect to X**
+
+To identify outliers with respect to X, we have to calculate the leverages of observations and see which leverages are "large".
+
+**Visualisation of the leverages**
+```{r}
+leverage <- hatvalues(best_model)
+plot(leverage, main = "Leverage Values")
+abline(h = 2 * mean(leverage), col = "red")
+```
+
+The majority of points have a low leverage.Some observations have high leverage values (points above the red line).Observations above the red line are considered to have potentially problematic leverage.
+
+**Leverage test**
+
+We say that an observation X_i is an outlier if 
+ $$
+ h_{ii}>2p/n
+ $$
+ 
+which will be our decision rule to detect outliers with respect to X. (see slide 300 theory course).
+
+**Code:**
+```{r}
+p=length(coefficients(reg_inter))
+n=nrow(training_data) 
+threshold_leverage =2 * p / n
+Outlier_X <- training_data[which(leverage > threshold_leverage),]
+```
+**Outliers with respect to Y**
+
+Because residuals are heteroskedastic (see later), we should standardize them and put them on the same scale. Thus we can compare the residuals and see which residuals are "large".
+
+The formula for the standardized residuals $ e_i^*$ is given by:
+ $$ 
+e_i^* = \frac{e_i}{\sqrt{\text{MSE} \cdot (1 - h_{ii})}} 
+ $$
+ 
+If an observation $Y_i$ has the standardised residuals $ e_i^*$ greater than 2 we consider $Y_i$ to be a potential outlier with respect to Y.
+
+**Code:**
+```{r}
+residuals=residuals(best_model)
+MSE=sum((residuals^2))/(n-p)
+res_stard=residuals/sqrt(MSE*(1-leverage))
+Outlier_Y= training_data[which(abs(res_stard)>2),]
+```
+
+**Influential observations:**
+
+**DFFITS Method:**
+
+To identify influential observations, we use the **Difference in FITted valueS (DFFITS)** test (as discussed on slide 314). This test measures how much the fitted value for a particular observation changes when that observation is removed from the model.
+
+**Formula:**
+
+The DFFITS value for the $i$-th observation is given by:
+$$
+DFFITS_i = d_i^* \sqrt{\frac{h_{ii}}{1 - h_{ii}}}
+$$
+Where:
+
+- $d_i^*$: Studentized residual for the $i$-th observation.  
+
+- $h_{ii}$: Leverage for the $i$-th observation, extracted from the diagonal of the hat matrix.  
+
+**Decision rule:**
+
+For n>=30(our case), the observation is influential if abs(DFFITS_i)>2 * sqrt(p / n), see slide 315.
+
+**Code:**
+```{r}
+dffits_values <- dffits(best_model)
+threshold <- 2 * sqrt(p / n)
+plot(dffits_values, main = "DFFITS Values", ylab = "DFFITS", xlab = "Observations")
+abline(h = c(threshold, -threshold), col = "red", lty = 2)
+Influential_observation= training_data[which(leverage > 2*p/n & abs(dffits_values) > threshold),]
+```
+**Observations:**
+
+26 observations were identified with high leverage and DFFITS values. 
+To assess whether these observations strongly influence the model, we will:  
+*Step 1.* Create a new model without these influential observations.  
+*Step 2.* Compare the results of the new model with the original model.
+
+**Code:**
+```{r}
+#Step 1:
+cleaned_data <- training_data[-which(leverage > 2*p/n & abs(dffits_values) > threshold), ]
+model_cleaned <- lm(citric.acid~volatile.acidity +fixed.acidity+ chlorides+ free.sulfur.dioxide+ total.sulfur.dioxide+ quality_2 +cat_alcohol_1 +cat_alcohol_2 +pH:cat_alcohol_2+ chlorides:quality_1, data = cleaned_data)
+#Step 2:
+summary(model_cleaned)
+summary(best_model)
+```
+**Analysis of Changes**
+
+After removing the 26 influential observations, we compared the results of the original model (`model_original`) and the cleaned model (`model_cleaned`).  
+
+**Key Findings:**
+
+1. **Adjusted $R^2$:**
+
+   - Original Model: $R^2_{adj} = 0.683$  
+
+   - Cleaned Model: $R^2_{adj} = 0.6957$  
+   The slight increase in adjusted $R^2$ indicates a small improvement in the explanatory capacity of the model without the influence points.  
+
+2. **Standard Error of Residuals:**
+   - Original Model: $SE = 0.1173$  
+   - Cleaned Model: $SE = 0.1146$  
+   The decrease in residual standard error suggests better accuracy of predictions after removing the influential points.  
+
+3. **Impact of Influential Observations:**
+   The 26 influential points had a noticeable effect on the model's accuracy. Their removal improved the model's fit slightly but did not radically change the overall conclusions.  
+
+**Conclusion:**
+Given the minor improvement in model performance and no drastic changes to the conclusions, we can confidently remove the influential points and proceed with the cleaned model (`model_cleaned`).  
+This ensures the model is not overly influenced by a small subset of extreme observations and provides more reliable predictions.
+
+Let's check our result through the Cook's distance plot (seen in the theory course).
+
+**Cook's distance:**
+```{r}
+plot(cooks.distance(model_cleaned), main = "Cook's Distance", ylim =c(-0.1, 1))
+abline(h = qf(0.5,11,510-11), col = "red", lty = 2) 
+```
+We can see that no observation approaches the threshold. Thus, the result holds
+
+**(c) Multicollinearity**
+
+**Testing for Multicollinearity**
+To test for multicollinearity, we calculate the **(General) Variance Inflation Factor (VIF)** for the predictors. The formula for VIF is:
+
+ $$
+\mathrm{VIF}_i = \frac{1}{1 - R_i^2}
+ $$
+
+Where:
+
+- $R_i^2$: The coefficient of determination from regressing $X_i$ on all the other predictors.
+
+**Code:**
+```{r}
+library(car)
+vif(model_cleaned)
+```
+**Interpretation:**
+
+If a VIF value greater than 10 indicates a potential problem of multicolinearity.
+
+*In our case:*
+
+Most variables have VIF values smaller than 10, suggesting no severe multicolinearity. However, cat_alcohol_2 and pH:cat_alcohol_2 show high VIF values, indicating a multicolinearity problem.
+
+**Treating Multicollinearity:**
+
+To address the multicolinearity issue, one option is to remove one of the problematic variables.
+In our case, we decide to remove pH:cat_alcohol_2.
+
+**Code:**
+```{r}
+best_model_mult_free=lm(citric.acid~volatile.acidity +fixed.acidity+ chlorides+ free.sulfur.dioxide+ total.sulfur.dioxide+ quality_2 +cat_alcohol_1 +cat_alcohol_2 + chlorides:quality_1, data = cleaned_data)
+vif(best_model_mult_free)
+```
+After removing **pH:cat_alcohol_2**, the VIF values for all remaining variables are below 10.
+This resolves the multicolinearity issue and ensures the stability of the regression coefficients in the final model (model_final).
+
+**(d) Heteroskedacity**
+
+To test heteroskedasticity we will use the test of Goldfeld-Quandt and the white test.
+Under these tests, the null hypothesis is that the model follows a homoskedasticity assumption.
+
+**Test of Goldfeld-Quandt**
+
+For this test we take two *arbitrary* groups A and B. The idea is to test the null which states homoskedasticity.
+ $$
+  H_0: \sigma_A^2 = \sigma_B^2
+ $$
+ $$
+ H_1: \sigma_A^2 \neq \sigma_B^2
+ $$
+
+
+```{r}
+#install.packages("lmtest")
+library(lmtest)
+lmtest::gqtest(best_model_mult_free, alternative = "two.sided")
+```
+we cannot reject the null hypothesis, the hypothesis of homoscedasticity  is not rejected, indicating that there is no heteroscedasticity problem in this model.
+To test this result we will also do the white test:
+
+**White test:**
+
+let's state the hypothesis of the white test:
+  $$
+  H_0: \sigma_1^2 = \sigma_2^2 = \dots = \sigma_n^2
+  $$
+ $$
+ H_1: \sigma_1^2 \neq \sigma_2^2 \neq \dots \neq \sigma_n^2
+ $$
+
+**Procedure of the white test seen in the theory course:**
+
+*-Step 1:* Calculate the residuals and the  auxiliary regression
+*-Step 2:* Calculate the Rsquared of this regression and the Chisquared statistic which follows n* *\(R^2\)*
+
+**Code:**
+```{r}
+#install.packages("skedastic")
+library(skedastic)
+skedastic::white(best_model_mult_free, interactions = TRUE)
+```
+The p-value of this test is much smaller than 0.05 and thus leading to a rejection of the homoskedasticity assumption.
+
+**Remedies:**
+
+**Weighted Least Squares (WLS) with Transformation of Variables:**
+
+*Introduction:*
+
+Weighted Least Squares (WLS) is an extension of Ordinary Least Squares (OLS) used to address heteroskedasticity (non-constant variance of residuals). The approach assigns weights to observations to stabilize variance and improve the model's efficiency.
+
+**Steps in WLS**
+
+1. **Calculate Weights:**
+   - Calculate the weights as the inverse of the variance of the residuals.
+   - Weights (\(w_i\)) are computed as:  
+   
+     $$ w_i = \frac{1}{\hat{\sigma}_i^2} $$  
+   
+  where $\hat{\sigma}_i^2$ is the estimated variance of the residuals for observation \(i\).  
+
+2. **Transform Variables:**
+   - Certain variables are transformed to improve model fit or interpretability.  
+     For example:
+     - *sqrt(chlorides):* Square root of chlorides.
+     - *exp(free.sulfur.dioxide):* Exponential of free sulfur dioxide.
+     - *exp(total.sulfur.dioxide):* Exponential of total sulfur dioxide.
+
+3. **Fit the Weighted Least Squares Model:**
+   - Use the transformed variables and the calculated weights to fit the WLS model.
+
+**Code:**
+```{r}
+weights <-1/fitted(lm(abs(residuals(best_model_mult_free)) ~ fitted(best_model_mult_free)))^2
+modele_wls <- lm(citric.acid~volatile.acidity +fixed.acidity+ sqrt(chlorides)+ exp(free.sulfur.dioxide)+ exp(total.sulfur.dioxide)+ quality_2 +cat_alcohol_1 +cat_alcohol_2 + chlorides:quality_1,data = cleaned_data, weights=weights)
+skedastic::white(modele_wls, interactions = TRUE)
+```
+The p-value is slightly higher than the conventional threshold of 0.05
+This means that the null hypothesis of homoscedasticity cannot be rejected. Thus we cannot reject if the classical assumptions hold.
+
+**(e)Autocorrelation**
+
+As seen in the theory course, autocorrelation might also be a statistical problem. We will also test this issue through the Breusch-Godfrey test. 
+
+**Breusch-Godfrey test**
+
+Let's state the hypothesis:
+
+ $$
+H_0: \text{Corr}(\epsilon_t, \epsilon_{t-j}) = 0, \forall j = 1, \dots, k
+ $$
+ $$
+H_1: \exists j = 1, \dots, k \text{ such that } \text{Corr}(\epsilon_t, \epsilon_{t-j}) \neq 0
+ $$
+In other words, the null states that the error terms are uncorrelated
+
+**Code:**
+```{r}
+library(lmtest)
+lmtest::bgtest(best_model_mult_free,order=2)
+```
+We can see that the null hypothesis is rejected, thus leading to an autocorrelation problem.
+
+**Remedies:**
+The Cochrane-Orcutt procedure is a method for dealing with autocorrelation problems:
+
+**Step 1.** First estimate the model by OLS
+
+**Step 2.** Calculate the autocorrelation coefficient (ρ) from the residuals
+
+**Step 3.** Transform the variables citric.acid,volatile.acidity according to the formula: 
+ $$ 
+ Y_t^* = Y_t - \rho \cdot Y_{t-1} \\
+ X_t^* = X_t - \rho \cdot X_{t-1}
+ $$
+
+**Step 4.** Re-estimate the model with the transformed variables
+```{r}
+# Fit the OLS (Ordinary Least Squares) model
+ols_model <- lm(citric.acid ~ volatile.acidity + fixed.acidity + chlorides + free.sulfur.dioxide + 
+                total.sulfur.dioxide + quality_2 + cat_alcohol_1 + cat_alcohol_2 + chlorides:quality_1, 
+                data = cleaned_data)
+
+
+# Extract the residuals from the OLS model
+residuals_ols <- resid(ols_model)
+
+
+# Create the lagged residuals (shifted residuals by one observation)
+lagged_residuals <- c(NA, head(residuals_ols, -1))  # Shift the residuals by one observation
+
+residuals_data <- data.frame(residuals_ols, lagged_residuals)
+
+# Remove the first observation (NA) to fit the model properly
+residuals_data <- na.omit(residuals_data)
+
+# Run a regression of the residuals on the lagged residuals to estimate rho (the autocorrelation coefficient)
+rho_model <- lm(residuals_ols ~ lagged_residuals, data = residuals_data)
+
+# Estimate the autocorrelation coefficient (rho)
+rho_hat <- coef(rho_model)["lagged_residuals"]
+
+
+# Calculate the transformed variables
+cleaned_data_trans <- cleaned_data[-1, ]  # Remove the first observation to avoid NA
+
+cleaned_data_trans$citric.acid_star <- cleaned_data$citric.acid[-1] - rho_hat * cleaned_data$citric.acid[-nrow(cleaned_data)]
+cleaned_data_trans$volatile.acidity_star <- cleaned_data$volatile.acidity[-1] - rho_hat * cleaned_data$volatile.acidity[-nrow(cleaned_data)]
+
+
+
+# Fit the Cochrane-Orcutt model (with transformed variables)
+cochrane_orcutt_model <- lm(citric.acid_star ~ volatile.acidity_star + fixed.acidity + chlorides + free.sulfur.dioxide +
+total.sulfur.dioxide + quality_2 + cat_alcohol_1 + cat_alcohol_2 +chlorides:quality_1, data = cleaned_data_trans)
+
+# Perform a Breusch-Godfrey test for autocorrelation of order 2
+bgtest(cochrane_orcutt_model, order = 2)
+```
+The p_value=0.6977 is well above the usual threshold of 0.05 ,model appears not to exhibit significant autocorrelation up to order 2
+
+## 6. Significance of the estimated coefficients and intrepretation of the qualitative variables
+```{r}
+summary(best_model_mult_free)
+```
+From this test we can take some conclusions:´
+
+**-Volatile.acidity** : 
+
+*Test result:* -0.484394  (p < 2e-16) *** 
+
+*Relationship:* Significant negative relationship
+
+*Meaning:* When volatile acidity increases by one 1 $g/dm^3$, citric acid decreases by -0.484394 $g/dm^3$.
+
+**-Fixed.acidity**:
+
+*Test result:*  0.062123  (p < 2e-16) *** 
+
+*Relationship:* Significant positive
+
+*Meaning:* When fixed acidity increases by one 1 $g/dm^3$, citric acid increases by 0.062123   $g/dm^3$.
+
+
+**-Chlorides:**
+
+*Test result:*  1.231126 (1.61e-14 ) *** 
+
+*Relationship:* Significant positive relationship
+
+*Meaning:* when chlorides increase by  1 $g/dm^3$, citric acid increases by 1.231126  $g/dm^3$.
+
+
+**-Free.sulfur.dioxide:**
+
+*Test result:* -0.003114 (p= 5.79e-05) *** 
+
+*Relationship:* Significant negative relationship
+
+*Meaning:* when Free.sulfur.dioxide increase by  1 $g/dm^3$, citric acid decreases by 0.003114 $g/dm^3$.
+
+
+**-Total.sulfur.dioxide:**
+
+*Test result:* 0.001711  (8.16e-13) *** 
+
+*Relationship:* Significant positive relationship
+
+*Meaning:* when total.sulfur.dioxide increase by  1 $g/dm^3$, citric acid increases by 0.001711 $g/dm^3$.
+
+**-Interaction entre chlorides et quality_1 **
+
+*Test result:* -0.736635   (2.53e-05) *** 
+
+*Relationship:* Significant  negative relationship
+
+*Meaning:* for medium quality wines, the effect of chlorides on citric acid is attenuated by 0.736635 compared to low quality wines.
+
+
+**-Cat_alcohol1:**
+
+*Test result:* 0.044534 (8.54e-05) *** 
+
+*Relationship:* Significant positive relationship
+
+*Meaning:* Wines with a medium alcohol level (cat_alcohol_1) have, on average, a citric acid concentration 0.045$g/dm^3$higher than wines with a low alcohol level, all other things being equal.
+
+**-Cat_alcohol2:**
+
+*Test result:* 0.141255 (2.11e-07) *** 
+
+*Relationship:* Significant positive relationship
+
+*Meaning:* Wines with a high alcohol level (cat_alcohol_2) have, on average, a citric acid concentration 0.141$g/dm^3$  higher than wines with a low alcohol level.
+
+**-Quality2:**
+
+*Test result:* -0.059077  ( 0.00876) *** 
+
+*Relationship:* Significant negative relationship
+
+*Meaning:* Wines with a high quality level (quality_2) have, on average, a citric acid concentration 0.059$g/dm^3$  lower than wines with a low quality .
+
+## 7.  Test of a linear combination of two coefficients
+
+Let us test the combined effect of volatile and fixed acidity, because both of these variables are related to the overall acidity of the wine.
+Let's test if these variables are **jointly significant**, in other words let's do a partial F-test for (the two variables).
+
+*Note: We recalled the hypothesis testing of the partial F-test in question 5*
+```{r}
+linearHypothesis(best_model_mult_free, hypothesis.matrix=c("volatile.acidity " , "fixed.acidity"))
+```
+
+We reject the null hypothesis  which means that both volatile.acidity and fixed.acidity have a significant effect on citric.acid in the model.
+
+## 8. Test of a subset of coefficients
+
+Let's test the coefficients of the qualitative variables *cat_alcohol_1* and *cat_alcohol_2*. For this we can do a *anova* test(seen in the theory course).
+
+**Code:**
+```{r}
+full_model <- lm(citric.acid~volatile.acidity +fixed.acidity+ chlorides+ free.sulfur.dioxide+ total.sulfur.dioxide+ quality_2 +cat_alcohol_1 +cat_alcohol_2 + chlorides:quality_1, data = cleaned_data)
+
+reduced_model <- lm(citric.acid~volatile.acidity +fixed.acidity+ chlorides+ free.sulfur.dioxide+ total.sulfur.dioxide+ quality_2+ chlorides:quality_1, data = cleaned_data)
+anova(reduced_model, full_model)
+```
+p_value =3.544e-08 highly significant,Including cat_alcohol_1 and cat_alcohol_2 significantly improves the model fit. This indicates that these qualitative variables have a statistically significant impact on the dependent variable, citric.acid.
+
+## 9. Calculate prediction intervals for the validation data
+
+Assuming that our model is linear let's calculate the prediction intervals.
+
+**Prediction Interval**
+
+To calculate a prediction interval, we need to fix $x^*$, which is a specific point in the predictor space. We aim to predict:
+
+$$
+Y^* = (x^t)^* \, \boldsymbol{\beta} + \epsilon^* 
+$$
+
+where $\epsilon^*$ is independent of $\epsilon_1, \cdots, \epsilon_n$.
+
+From the theory course, we know that the prediction interval at a confidence level of $(1 - \alpha) \cdot 100\%$ is given by:
+
+$$
+\hat{Y}^* \pm t_{n-p;1-\alpha/2} \cdot S \sqrt{1 + x^* \, (X^t X)^{-1} x^{*t}}
+$$
+**Explanation:**
+
+- $(x^t)^*$: Row vector of the predictor values at the point $x^*$.  
+
+- $\boldsymbol{\beta}$: Vector of estimated regression coefficients.  
+
+- $t_{n-p;1-\alpha/2}$: Critical value of the $t$-distribution with $n-p$ degrees of freedom at significance level $\alpha/2$.  
+
+- $S$: Unbisased estimator of the standard deviation.  
+
+
+**Code:**
+```{r}
+ validation_data <- fastDummies::dummy_cols( validation_data, select_columns = "cat_alcohol")
+ validation_data <- fastDummies::dummy_cols( validation_data, select_columns = "quality")
+predictions <- predict(best_model_mult_free, newdata = validation_data, interval = "prediction", level = 0.95)
+actual_values <- validation_data$citric.acid
+coverage <- mean(actual_values >= predictions[,"lwr"] & actual_values <= predictions[,"upr"])
+print(paste("Coverage percentage:", round(coverage * 100, 2), "%"))
+```
+The coverage percentage is 90%, which is lower than the expected nominal level of 95%. This discrepancy may be due to the following reasons:
+
+*-Omission of important variables:* If relevant variables are missing from the model, predictions may be biased.
+
+*-Small validation sample size:* A smaller validation sample may lead to less precise estimates and undercoverage.
+
+*-Non-normality of residuals or heteroskedasticity:* Violations of the assumptions of normality and constant variance in the residuals could affect the accuracy of the confidence intervals.
+
+**- Wrong assumption that the model is linear**, in other words, the we can reject the hypothesis that the model is linear.
+
+## 10.Assessing usefullness and adequateness of the model
+
+In this project, we aimed to develop a linear regression model that predicts citric acid concentrations in wine samples using various predictors. The model was trained on 90% of the data (training_data) and validated on the remaining 10% (validation_data) to evaluate its performance in terms of predictive accuracy and inference validity.
+
+Despite these efforts, several important conclusions can be drawn:
+
+**Model Adequacy and Robustness:** While the model was trained on a substantial portion of the data (90%), and we ensured that the classical assumptions were met, the linearity assumption was not strictly validated. However, the model was designed to be robust to violations of classical assumptions, which helped mitigate issues related to linearity and other potential concerns.
+
+**Predictive Performance:** Despite the model's robustness, its predictive performance on the validation data was sub-optimal. Specifically, at a nominal level, the model failed to accurately predict the validation data. This indicates that further refinement may be necessary, such as exploring non-linear models to improve prediction accuracy.
+
+**Model's Usefulness for Inference:** While the model may not perform well in terms of prediction, it still provides valuable insights into the relationships between the predictors and citric acid concentrations. But caution is needed when applying these insights for inference, given the model's predictive limitations.
+
+
